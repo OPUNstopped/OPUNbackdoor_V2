@@ -1,11 +1,1 @@
-pyaudio
-opencv-python
-pygetwindow
-pynput
-Pillow
-psutil
-netifaces
-platform
-pyautogui
-webbrowser
-requests
+pip install pillow pynput pyautogui opencv-python pyaudio psutil netifaces requests pycryptodome
